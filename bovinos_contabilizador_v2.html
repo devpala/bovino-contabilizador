@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro Bovinos - Vacunación Fiebre Aftosa</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --tierra: #3d2b1f;
+    --paja: #e8d5a3;
+    --campo: #5a7a3a;
+    --campo-claro: #7aaa52;
+    --cielo: #c8dde8;
+    --acento: #c4702b;
+    --blanco: #faf7f0;
+    --sombra: rgba(61,43,31,0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--blanco);
+    font-family: 'Libre Baskerville', serif;
+    color: var(--tierra);
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 80% 0%, #dcebd0 0%, transparent 55%),
+      radial-gradient(ellipse at 0% 100%, #e8d5a3 0%, transparent 50%);
+  }
+  header {
+    background: var(--tierra);
+    color: var(--paja);
+    padding: 18px 32px 14px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-bottom: 5px solid var(--acento);
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    right: -30px; top: -30px;
+    width: 160px; height: 160px;
+    background: var(--acento);
+    opacity: 0.08;
+    border-radius: 50%;
+  }
+  .header-icon { font-size: 2.6rem; }
+  .header-text h1 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1.35rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--paja);
+  }
+  .header-text p {
+    font-size: 0.78rem;
+    color: #c9b98a;
+    margin-top: 2px;
+    font-style: italic;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 28px 18px 50px; }
+  .ubicacion-bar {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 28px;
+    background: var(--paja);
+    border: 2px solid var(--tierra);
+    border-radius: 8px;
+    padding: 14px 18px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .ubicacion-bar label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tierra);
+  }
+  .ubicacion-bar input {
+    border: 1.5px solid #b5a07a;
+    background: var(--blanco);
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--tierra);
+    flex: 1;
+    min-width: 180px;
+  }
+  .seccion-titulo {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--campo);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .seccion-titulo::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: var(--campo-claro);
+    opacity: 0.4;
+  }
+  .grid-categorias {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .cat-card {
+    background: white;
+    border: 2px solid #ddd0b8;
+    border-radius: 10px;
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .cat-card:hover {
+    border-color: var(--campo-claro);
+    box-shadow: 0 4px 16px var(--sombra);
+  }
+  .cat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--campo);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .cat-card:hover::before { opacity: 1; }
+  .cat-nombre {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--tierra);
+  }
+  .cat-emoji { font-size: 1.5rem; }
+  .counter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-count {
+    width: 32px; height: 32px;
+    border: 2px solid var(--tierra);
+    background: var(--blanco);
+    border-radius: 6px;
+    font-size: 1.2rem;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--tierra);
+    transition: background 0.15s, color 0.15s;
+    font-family: 'Archivo Black', sans-serif;
+    flex-shrink: 0;
+  }
+  .btn-count:hover { background: var(--tierra); color: var(--paja); }
+  .btn-count.plus { border-color: var(--campo); color: var(--campo); }
+  .btn-count.plus:hover { background: var(--campo); color: white; }
+  .count-input {
+    flex: 1;
+    text-align: center;
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1.4rem;
+    color: var(--tierra);
+    border: none;
+    background: transparent;
+    width: 100%;
+    outline: none;
+    min-width: 0;
+  }
+  .count-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .total-bar {
+    background: var(--tierra);
+    color: var(--paja);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .total-label {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  .total-num {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 2.6rem;
+    color: var(--campo-claro);
+    line-height: 1;
+  }
+  .total-desglose {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    opacity: 0.7;
+    font-style: italic;
+  }
+  .acciones {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .btn-accion {
+    padding: 10px 22px;
+    border-radius: 7px;
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    cursor: pointer;
+    border: 2px solid var(--tierra);
+    background: var(--blanco);
+    color: var(--tierra);
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-accion:hover { background: var(--tierra); color: var(--paja); }
+  .btn-accion.primary { background: var(--campo); color: white; border-color: var(--campo); }
+  .btn-accion.primary:hover { background: var(--campo-claro); border-color: var(--campo-claro); }
+  .btn-accion.danger { border-color: #c0392b; color: #c0392b; }
+  .btn-accion.danger:hover { background: #c0392b; color: white; }
+  .historial {
+    margin-top: 32px;
+    border: 2px solid #ddd0b8;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .historial-header {
+    background: var(--paja);
+    padding: 12px 18px;
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tierra);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .historial-lista { background: white; }
+  .historial-item {
+    padding: 12px 18px;
+    border-bottom: 1px solid #ede5d2;
+    font-size: 0.82rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    animation: fadeIn 0.3s ease;
+  }
+  .historial-item:last-child { border-bottom: none; }
+  .historial-item .fecha { color: #888; font-style: italic; font-size: 0.75rem; }
+  .historial-item .total-chico {
+    font-family: 'Archivo Black', sans-serif;
+    color: var(--campo);
+    font-size: 1rem;
+  }
+  .historial-vacio { padding: 20px 18px; color: #aaa; font-style: italic; font-size: 0.85rem; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @media (max-width: 600px) {
+    .grid-categorias { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 14px 16px; }
+    .container { padding: 16px 10px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="header-icon">🐄</span>
+  <div class="header-text">
+    <h1>Registro de Vacunación — Fiebre Aftosa</h1>
+    <p>Bovinos — Formulario oficial</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="ubicacion-bar">
+    <label>Ubicación:</label>
+    <input type="text" id="ubicacion" placeholder="Establecimiento / Paraje">
+  </div>
+
+  <div class="seccion-titulo">🐄 Bovinos vacunados</div>
+
+  <div class="grid-categorias" id="grid"></div>
+
+  <div class="total-bar">
+    <div>
+      <div class="total-label">Total animales vacunados</div>
+      <div class="total-num" id="total-num">0</div>
+    </div>
+    <div class="total-desglose" id="desglose"></div>
+  </div>
+
+  <div class="acciones">
+    <button class="btn-accion primary" onclick="guardarRegistro()">💾 Guardar registro</button>
+    <button class="btn-accion" onclick="exportarTexto()">📋 Copiar resumen</button>
+    <button class="btn-accion danger" onclick="limpiarTodo()">✕ Limpiar</button>
+  </div>
+
+  <div class="historial">
+    <div class="historial-header">
+      <span>📋 Historial de registros</span>
+      <span id="hist-count" style="font-weight:normal;opacity:0.6;font-size:0.75rem;">0 registros</span>
+    </div>
+    <div class="historial-lista" id="historial-lista">
+      <div class="historial-vacio">No hay registros guardados aún.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const CATEGORIAS = [
+  { key: 'vacas',           label: 'Vacas',            emoji: '🐄' },
+  { key: 'toros',           label: 'Toros',            emoji: '🐂' },
+  { key: 'toritos_mej',     label: 'Toritos / MEJ',    emoji: '🐃' },
+  { key: 'novillos_bueyes', label: 'Novillos / Bueyes',emoji: '🐮' },
+  { key: 'novillitos',      label: 'Novillitos',        emoji: '🐮' },
+  { key: 'vaquillonas',     label: 'Vaquillonas',       emoji: '🐄' },
+  { key: 'terneras',        label: 'Terneras',          emoji: '🐄' },
+  { key: 'terneros',        label: 'Terneros',          emoji: '🐃' },
+];
+
+let valores = {};
+let historial = [];
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  CATEGORIAS.forEach(cat => {
+    const val = valores[cat.key] || 0;
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="cat-emoji">${cat.emoji}</span>
+        <span class="cat-nombre">${cat.label}</span>
+      </div>
+      <div class="counter-row">
+        <button class="btn-count" onclick="cambiar('${cat.key}', -1)">−</button>
+        <input class="count-input" type="number" min="0" value="${val}"
+          id="inp-${cat.key}"
+          oninput="setValor('${cat.key}', this.value)">
+        <button class="btn-count plus" onclick="cambiar('${cat.key}', 1)">+</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function cambiar(key, delta) {
+  valores[key] = Math.max(0, (valores[key] || 0) + delta);
+  const inp = document.getElementById('inp-' + key);
+  if (inp) inp.value = valores[key];
+  actualizarTotal();
+}
+
+function setValor(key, val) {
+  valores[key] = Math.max(0, parseInt(val) || 0);
+  actualizarTotal();
+}
+
+function actualizarTotal() {
+  let total = 0;
+  const partes = [];
+  CATEGORIAS.forEach(cat => {
+    const v = valores[cat.key] || 0;
+    total += v;
+    if (v > 0) partes.push(`${cat.label}: ${v}`);
+  });
+  document.getElementById('total-num').textContent = total;
+  document.getElementById('desglose').innerHTML = partes.map(p => `<span>${p}</span>`).join('');
+}
+
+function limpiarTodo() {
+  CATEGORIAS.forEach(c => { valores[c.key] = 0; });
+  renderGrid();
+  actualizarTotal();
+}
+
+function guardarRegistro() {
+  let total = 0;
+  const detalle = {};
+  CATEGORIAS.forEach(cat => {
+    const v = valores[cat.key] || 0;
+    total += v;
+    if (v > 0) detalle[cat.label] = v;
+  });
+  if (total === 0) { alert('Ingrese al menos un animal antes de guardar.'); return; }
+  const ubicacion = document.getElementById('ubicacion').value.trim() || 'Sin especificar';
+  const ahora = new Date();
+  const fecha = ahora.toLocaleDateString('es-AR') + ' ' + ahora.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+  historial.unshift({ ubicacion, fecha, total, detalle });
+  renderHistorial();
+  alert(`✅ Registro guardado\n${ubicacion} — ${total} bovinos`);
+}
+
+function renderHistorial() {
+  const lista = document.getElementById('historial-lista');
+  document.getElementById('hist-count').textContent = historial.length + ' registros';
+  if (historial.length === 0) {
+    lista.innerHTML = '<div class="historial-vacio">No hay registros guardados aún.</div>';
+    return;
+  }
+  lista.innerHTML = historial.map(r => {
+    const det = Object.entries(r.detalle).map(([k,v]) => `${k}: ${v}`).join(' · ');
+    return `
+      <div class="historial-item">
+        <div>
+          <strong>${r.ubicacion}</strong>
+          <div style="margin-top:4px;color:#666;">${det}</div>
+          <div class="fecha">${r.fecha}</div>
+        </div>
+        <div class="total-chico">${r.total} animales</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function exportarTexto() {
+  const ubicacion = document.getElementById('ubicacion').value.trim() || 'Sin especificar';
+  let total = 0;
+  let lineas = [`REGISTRO VACUNACIÓN — FIEBRE AFTOSA`, `Ubicación: ${ubicacion}`, `---`];
+  CATEGORIAS.forEach(cat => {
+    const v = valores[cat.key] || 0;
+    total += v;
+    lineas.push(`${cat.label}: ${v}`);
+  });
+  lineas.push(`---`, `TOTAL: ${total}`);
+  navigator.clipboard.writeText(lineas.join('\n')).then(() => {
+    alert('✅ Resumen copiado al portapapeles');
+  }).catch(() => alert(lineas.join('\n')));
+}
+
+renderGrid();
+actualizarTotal();
+</script>
+</body>
+</html>
