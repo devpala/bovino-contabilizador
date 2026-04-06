@@ -1,18 +1,20 @@
 import { VaccinationForm } from "@/components/vaccination-form";
-import { getDashboardData } from "@/lib/records";
-import type { Establishment, VaccinationRecord } from "@/lib/types";
+import { getDashboardData, getInformationAnimals } from "@/lib/records";
+import type { Establishment, InformationAnimal, VaccinationRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   let establishments: Establishment[] = [];
   let records: VaccinationRecord[] = [];
+  let informationItems: InformationAnimal[] = [];
   let dbError = "";
 
   try {
-    const data = await getDashboardData();
+    const [data, items] = await Promise.all([getDashboardData(), getInformationAnimals()]);
     establishments = data.establishments;
     records = data.records;
+    informationItems = items;
   } catch (error) {
     console.error(error);
     dbError =
@@ -21,20 +23,12 @@ export default async function HomePage() {
 
   return (
     <main className="page-shell">
-      <header className="page-header">
-        <span className="header-icon" aria-hidden="true">
-          🐄
-        </span>
-        <div className="header-copy">
-          <h1>Contabilizador Bovino</h1>
-          <p>Bovinos - formulario con persistencia local</p>
-        </div>
-      </header>
-
-      <div className="container">
-        {dbError ? <div className="status-banner">{dbError}</div> : null}
-        <VaccinationForm establishments={establishments} records={records} />
-      </div>
+      <VaccinationForm
+        establishments={establishments}
+        records={records}
+        informationItems={informationItems}
+        dbError={dbError}
+      />
     </main>
   );
 }

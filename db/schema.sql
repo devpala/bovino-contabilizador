@@ -49,3 +49,59 @@ create index if not exists vaccination_records_created_at_idx
 
 create index if not exists vaccination_records_establishment_created_at_idx
   on vaccination_records (establishment_id, created_at desc);
+
+create table if not exists information_animals (
+  id bigserial primary key,
+  establishment_id bigint not null references establishments(id) on delete cascade,
+  animal_id bigint references animals(id) on delete cascade,
+  section_key text not null,
+  year integer not null check (year >= 2000 and year <= 2100),
+  animal_type text not null,
+  description text not null,
+  created_at timestamptz not null default now(),
+  check (section_key in ('prenadas', 'vacasViejas', 'nacimientos')),
+  check (animal_type in ('vaca', 'ternero', 'toro'))
+);
+
+alter table information_animals
+  add column if not exists animal_id bigint references animals(id) on delete cascade;
+
+create index if not exists information_animals_establishment_section_year_idx
+  on information_animals (establishment_id, section_key, year);
+
+create index if not exists information_animals_establishment_created_at_idx
+  on information_animals (establishment_id, created_at desc);
+
+create unique index if not exists information_animals_unique_animal_section_year_idx
+  on information_animals (animal_id, section_key, year)
+  where animal_id is not null;
+
+create table if not exists animals (
+  id bigserial primary key,
+  establishment_id bigint not null references establishments(id) on delete cascade,
+  category_key text not null,
+  identifier text not null,
+  description text not null default '',
+  age_months integer,
+  status text not null default '',
+  observations text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (category_key in ('vacas', 'toros', 'novillitos', 'vaquillonas', 'terneras', 'terneros')),
+  check (age_months is null or age_months >= 0),
+  unique (establishment_id, category_key, identifier)
+);
+
+create table if not exists animal_images (
+  id bigserial primary key,
+  animal_id bigint not null references animals(id) on delete cascade,
+  file_name text not null,
+  file_path text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists animals_establishment_category_idx
+  on animals (establishment_id, category_key, created_at desc);
+
+create index if not exists animal_images_animal_idx
+  on animal_images (animal_id, created_at desc);

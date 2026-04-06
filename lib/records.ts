@@ -1,7 +1,10 @@
 import { getPool } from "@/lib/db";
 import { CATEGORIES, createDefaultValues } from "@/lib/categories";
 import type {
+  AnimalType,
   Establishment,
+  InformationAnimal,
+  InformationSectionKey,
   MovementType,
   RecordDetail,
   VaccinationRecord,
@@ -29,6 +32,24 @@ type DbEstablishmentRow = {
   created_at: Date;
 };
 
+type DbInformationAnimalRow = {
+  id: string;
+  establishment_id: string;
+  animal_id: string | null;
+  animal_identifier: string | null;
+  section_key: InformationSectionKey;
+  year: number;
+  animal_type: AnimalType;
+  description: string;
+  created_at: Date;
+};
+
+type DbAnimalCountRow = {
+  establishment_id: string;
+  category_key: string;
+  animal_count: number;
+};
+
 function sanitizeDetail(detail: RecordDetail | null | undefined) {
   const defaults = createDefaultValues();
 
@@ -45,7 +66,7 @@ export async function getDashboardData(): Promise<{
   records: VaccinationRecord[];
 }> {
   const pool = getPool();
-  const [establishmentsResult, recordsResult] = await Promise.all([
+  const [establishmentsResult, recordsResult, animalCountsResult] = await Promise.all([
     pool.query<DbEstablishmentRow>(
       `
         select id::text, name, herd_total, herd_detail, created_at
@@ -73,15 +94,44 @@ export async function getDashboardData(): Promise<{
         limit 200
       `,
     ),
+    pool.query<DbAnimalCountRow>(
+      `
+        select
+          establishment_id::text,
+          category_key,
+          count(*)::int as animal_count
+        from animals
+        group by establishment_id, category_key
+      `,
+    ),
   ]);
 
-  const establishments = establishmentsResult.rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    herdTotal: row.herd_total,
-    herdDetail: sanitizeDetail(row.herd_detail),
-    createdAt: row.created_at.toISOString(),
-  }));
+  const animalCountsByEstablishment = new Map<string, RecordDetail>();
+  const animalTotalsByEstablishment = new Map<string, number>();
+
+  for (const row of animalCountsResult.rows) {
+    const currentDetail = animalCountsByEstablishment.get(row.establishment_id) ?? createDefaultValues();
+    currentDetail[row.category_key] = row.animal_count;
+    animalCountsByEstablishment.set(row.establishment_id, currentDetail);
+    animalTotalsByEstablishment.set(
+      row.establishment_id,
+      (animalTotalsByEstablishment.get(row.establishment_id) ?? 0) + row.animal_count,
+    );
+  }
+
+  const establishments = establishmentsResult.rows.map((row) => {
+    const animalDetail = animalCountsByEstablishment.get(row.id);
+    const animalTotal = animalTotalsByEstablishment.get(row.id) ?? 0;
+
+    return {
+      id: row.id,
+      name: row.name,
+      herdTotal: animalTotal > 0 ? animalTotal : row.herd_total,
+      herdDetail: animalTotal > 0 ? sanitizeDetail(animalDetail) : sanitizeDetail(row.herd_detail),
+      individualAnimalCount: animalTotal,
+      createdAt: row.created_at.toISOString(),
+    };
+  });
 
   const records = recordsResult.rows.map((row) => ({
     id: row.id,
@@ -98,6 +148,38 @@ export async function getDashboardData(): Promise<{
   }));
 
   return { establishments, records };
+}
+
+export async function getInformationAnimals(): Promise<InformationAnimal[]> {
+  const pool = getPool();
+  const result = await pool.query<DbInformationAnimalRow>(
+    `
+      select
+        id::text,
+        establishment_id::text,
+        animal_id::text,
+        (select identifier from animals a where a.id = information_animals.animal_id) as animal_identifier,
+        section_key,
+        year,
+        animal_type,
+        description,
+        created_at
+      from information_animals
+      order by created_at desc
+    `,
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    establishmentId: row.establishment_id,
+    animalId: row.animal_id,
+    animalIdentifier: row.animal_identifier,
+    sectionKey: row.section_key,
+    year: String(row.year),
+    animalType: row.animal_type,
+    description: row.description,
+    createdAt: row.created_at.toISOString(),
+  }));
 }
 
 export async function createEstablishment(name: string): Promise<Establishment> {
@@ -315,4 +397,77 @@ export async function createMovementRecord(input: {
   } finally {
     client.release();
   }
+}
+
+export async function createInformationAnimal(input: {
+  establishmentId: string;
+  animalId?: string;
+  sectionKey: InformationSectionKey;
+  year: string;
+  animalType: AnimalType;
+  description: string;
+}): Promise<InformationAnimal> {
+  const pool = getPool();
+  const result = await pool.query<DbInformationAnimalRow>(
+    `
+        insert into information_animals (
+          establishment_id,
+          animal_id,
+          section_key,
+          year,
+          animal_type,
+          description
+        )
+      values ($1::bigint, $2::bigint, $3, $4, $5, $6)
+      returning
+        id::text,
+        establishment_id::text,
+        animal_id::text,
+        null::text as animal_identifier,
+        section_key,
+        year,
+        animal_type,
+        description,
+        created_at
+    `,
+    [
+      input.establishmentId,
+      input.animalId ?? null,
+      input.sectionKey,
+      Number(input.year),
+      input.animalType,
+      input.description,
+    ],
+  );
+
+  const row = result.rows[0];
+
+  return {
+    id: row.id,
+    establishmentId: row.establishment_id,
+    animalId: row.animal_id,
+    animalIdentifier: row.animal_identifier,
+    sectionKey: row.section_key,
+    year: String(row.year),
+    animalType: row.animal_type,
+    description: row.description,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+export async function deleteInformationAnimal(input: {
+  id: string;
+  establishmentId: string;
+}): Promise<boolean> {
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      delete from information_animals
+      where id = $1::bigint
+        and establishment_id = $2::bigint
+    `,
+    [input.id, input.establishmentId],
+  );
+
+  return (result.rowCount ?? 0) > 0;
 }

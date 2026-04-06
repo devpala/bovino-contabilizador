@@ -1,17 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useRouter } from "next/navigation";
+import { PageShell } from "./page-shell";
 import {
-  createEstablishmentAction,
   registerMovementAction,
   saveVaccinationRecord,
   type SaveState,
 } from "@/app/actions";
 import { CATEGORIES, createDefaultValues } from "@/lib/categories";
-import type { Establishment, MovementType, VaccinationRecord } from "@/lib/types";
+import { INFORMATION_SECTIONS, INFORMATION_YEARS } from "@/lib/information";
+import type { Establishment, InformationAnimal, MovementType, VaccinationRecord } from "@/lib/types";
 
 const initialState: SaveState = {
   success: false,
@@ -21,6 +23,8 @@ const initialState: SaveState = {
 type VaccinationFormProps = {
   establishments: Establishment[];
   records: VaccinationRecord[];
+  informationItems: InformationAnimal[];
+  dbError?: string;
 };
 
 function hydrateValues(detail?: Record<string, number>) {
@@ -102,6 +106,8 @@ function getDefaultMovementToCategory(fromCategory: string) {
 export function VaccinationForm({
   establishments: initialEstablishments,
   records: initialRecords,
+  informationItems,
+  dbError,
 }: VaccinationFormProps) {
   const router = useRouter();
   const [establishments, setEstablishments] = useState(initialEstablishments);
@@ -120,13 +126,13 @@ export function VaccinationForm({
   const [movementCategory, setMovementCategory] = useState(CATEGORIES[0]?.key ?? "");
   const [movementToCategory, setMovementToCategory] = useState(CATEGORIES[1]?.key ?? CATEGORIES[0]?.key ?? "");
   const [movementQuantity, setMovementQuantity] = useState(1);
-  const [isEstablishmentModalOpen, setIsEstablishmentModalOpen] = useState(false);
-  const [newEstablishmentName, setNewEstablishmentName] = useState("");
+  const [selectedInformationYear, setSelectedInformationYear] = useState<(typeof INFORMATION_YEARS)[number]>("2026");
 
   const selectedEstablishment = useMemo(
     () => establishments.find((item) => item.id === selectedEstablishmentId) ?? null,
     [establishments, selectedEstablishmentId],
   );
+  const usesIndividualAnimals = (selectedEstablishment?.individualAnimalCount ?? 0) > 0;
 
   const total = useMemo(
     () => Object.values(values).reduce((sum, value) => sum + value, 0),
@@ -145,6 +151,20 @@ export function VaccinationForm({
   const filteredRecords = useMemo(
     () => records.filter((record) => record.establishmentId === selectedEstablishmentId),
     [records, selectedEstablishmentId],
+  );
+
+  const informationCounts = useMemo(
+    () =>
+      INFORMATION_SECTIONS.map((section) => ({
+        ...section,
+        total: informationItems.filter(
+          (item) =>
+            item.establishmentId === selectedEstablishmentId &&
+            item.year === selectedInformationYear &&
+            item.sectionKey === section.key,
+        ).length,
+      })),
+    [informationItems, selectedEstablishmentId, selectedInformationYear],
   );
 
   const movementCategoryOptions = useMemo(() => {
@@ -350,43 +370,10 @@ export function VaccinationForm({
     });
   }
 
-  function openEstablishmentModal() {
-    setNewEstablishmentName("");
-    setIsEstablishmentModalOpen(true);
-  }
-
-  function closeEstablishmentModal() {
-    setIsEstablishmentModalOpen(false);
-  }
-
-  function handleCreateEstablishment() {
-    const formData = new FormData();
-    formData.set("name", newEstablishmentName);
-
-    startTransition(async () => {
-      const result = await createEstablishmentAction(formData);
-
-      if (!result.success || !result.establishment) {
-        setState({
-          success: false,
-          message: result.message,
-        });
-        return;
-      }
-
-      setEstablishments((current) =>
-        [...current, result.establishment!].sort((a, b) => a.name.localeCompare(b.name, "es")),
-      );
-      setSelectedEstablishmentId(result.establishment.id);
-      setValues(hydrateValues(result.establishment.herdDetail));
-      setIsEditing(false);
-      setState({
-        success: true,
-        message: result.message,
-      });
-      closeEstablishmentModal();
-      router.refresh();
-    });
+  function handleEstablishmentCreated(establishment: Establishment) {
+    setEstablishments((current) =>
+      [...current, establishment].sort((a, b) => a.name.localeCompare(b.name, "es")),
+    );
   }
 
   function handleSubmit(formData: FormData) {
@@ -409,41 +396,26 @@ export function VaccinationForm({
   }
 
   return (
-    <form action={handleSubmit}>
-      <input type="hidden" name="establishmentId" value={selectedEstablishmentId} />
+    <PageShell
+      establishments={establishments}
+      selectedEstablishmentId={selectedEstablishmentId}
+      onEstablishmentChange={handleEstablishmentChange}
+      onEstablishmentCreated={handleEstablishmentCreated}
+    >
+      <form action={handleSubmit}>
+        <input type="hidden" name="establishmentId" value={selectedEstablishmentId} />
 
-      <div className="location-bar establishment-bar">
-        <label htmlFor="establishmentId">Establecimiento:</label>
-        <select
-          id="establishmentId"
-          name="establishmentSelector"
-          value={selectedEstablishmentId}
-          onChange={(event) => handleEstablishmentChange(event.target.value)}
-        >
-          {establishments.length === 0 ? (
-            <option value="">Sin establecimientos</option>
-          ) : null}
-          {establishments.map((establishment) => (
-            <option key={establishment.id} value={establishment.id}>
-              {establishment.name}
-            </option>
-          ))}
-        </select>
-        <button className="action-button secondary" type="button" onClick={openEstablishmentModal}>
-          Agregar establecimiento
-        </button>
-      </div>
-
-      <div className="section-toolbar">
-        <button
-          className="action-button secondary"
-          type="button"
-          onClick={() => openMovementModal("venta")}
-          disabled={!selectedEstablishment}
-        >
-          Registrar
-        </button>
-      </div>
+        {dbError ? <div className="status-banner">{dbError}</div> : null}
+        <div className="section-toolbar">
+          <button
+            className="action-button secondary"
+            type="button"
+            onClick={() => openMovementModal("venta")}
+            disabled={!selectedEstablishment || usesIndividualAnimals}
+          >
+            Registrar
+          </button>
+        </div>
 
       <div className="section-title">Bovinos</div>
 
@@ -452,7 +424,32 @@ export function VaccinationForm({
           const value = values[category.key] ?? 0;
 
           return (
-            <div className="category-card" key={category.key}>
+            <div
+              className="category-card category-card-link"
+              key={category.key}
+              role="button"
+              tabIndex={selectedEstablishment ? 0 : -1}
+              onClick={() =>
+                selectedEstablishment
+                  ? router.push(
+                      `/animales/${category.key}?establishmentId=${encodeURIComponent(selectedEstablishmentId)}`,
+                    )
+                  : undefined
+              }
+              onKeyDown={(event) => {
+                if (!selectedEstablishment) {
+                  return;
+                }
+
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push(
+                    `/animales/${category.key}?establishmentId=${encodeURIComponent(selectedEstablishmentId)}`,
+                  );
+                }
+              }}
+              aria-disabled={!selectedEstablishment}
+            >
               <div className="card-header">
                 <span className="card-emoji" aria-hidden="true">
                   {category.emoji}
@@ -465,6 +462,7 @@ export function VaccinationForm({
                   className="counter-button"
                   type="button"
                   hidden={!isEditing}
+                  disabled={usesIndividualAnimals}
                   onClick={() => updateValue(category.key, value - 1)}
                 >
                   -
@@ -476,9 +474,9 @@ export function VaccinationForm({
                   min="0"
                   name={category.key}
                   value={value}
-                  readOnly={!isEditing}
-                  aria-readonly={!isEditing}
-                  data-editing={isEditing ? "true" : "false"}
+                  readOnly={!isEditing || usesIndividualAnimals}
+                  aria-readonly={!isEditing || usesIndividualAnimals}
+                  data-editing={isEditing && !usesIndividualAnimals ? "true" : "false"}
                   onChange={(event) =>
                     updateValue(category.key, Number.parseInt(event.target.value || "0", 10) || 0)
                   }
@@ -488,6 +486,7 @@ export function VaccinationForm({
                   className="counter-button plus"
                   type="button"
                   hidden={!isEditing}
+                  disabled={usesIndividualAnimals}
                   onClick={() => updateValue(category.key, value + 1)}
                 >
                   +
@@ -513,23 +512,30 @@ export function VaccinationForm({
 
       <div className="actions">
         <button
-          className="action-button primary"
-          type="submit"
-          disabled={isPending || !selectedEstablishment}
+          className="action-button secondary"
+          type="button"
+          onClick={() =>
+            router.push(
+              `/animales/vacas?establishmentId=${encodeURIComponent(selectedEstablishmentId)}`,
+            )
+          }
+          disabled={!selectedEstablishment}
         >
-          {isPending ? "Guardando..." : "Guardar registro"}
+          Agregar
         </button>
         <button className="action-button" type="button" onClick={copySummary}>
           Descargar PDF
         </button>
-        <button
-          className="action-button"
-          type="button"
-          onClick={() => setIsEditing((current) => !current)}
-          disabled={!selectedEstablishment}
-        >
-          {isEditing ? "Cerrar edicion" : "Editar"}
-        </button>
+        {!usesIndividualAnimals ? (
+          <button
+            className="action-button"
+            type="button"
+            onClick={() => setIsEditing((current) => !current)}
+            disabled={!selectedEstablishment}
+          >
+            {isEditing ? "Cerrar edicion" : "Editar"}
+          </button>
+        ) : null}
       </div>
 
       {state.message ? (
@@ -537,6 +543,57 @@ export function VaccinationForm({
           {state.message}
         </div>
       ) : null}
+
+      <section className="info-panel">
+        <div className="info-page-header">
+          <div>
+            <div className="section-title">Informacion</div>
+            <p className="info-page-copy">
+              Haz clic en una seccion para abrir su ruta y ver la lista de animales.
+            </p>
+          </div>
+          <div className="info-header-actions">
+            <label htmlFor="home-info-year">Ano</label>
+            <select
+              id="home-info-year"
+              value={selectedInformationYear}
+              onChange={(event) =>
+                setSelectedInformationYear(event.target.value as (typeof INFORMATION_YEARS)[number])
+              }
+            >
+              {INFORMATION_YEARS.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="info-grid">
+          {informationCounts.map((item) => (
+            <Link
+              className="info-card info-card-button"
+              key={item.key}
+              href={{
+                pathname: `/informacion/${item.slug}`,
+                query: selectedEstablishmentId
+                  ? { establishmentId: selectedEstablishmentId, year: selectedInformationYear }
+                  : { year: selectedInformationYear },
+              }}
+            >
+              <div className="info-card-header">
+                <div>
+                  <div className="info-card-label">Ano {selectedInformationYear}</div>
+                  <h3>{item.title}</h3>
+                </div>
+              </div>
+              <p>{item.description}</p>
+              <div className="info-card-total">Total: {item.total}</div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={closeMovementModal}>
@@ -628,45 +685,6 @@ export function VaccinationForm({
         </div>
       ) : null}
 
-      {isEstablishmentModalOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={closeEstablishmentModal}>
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="establishment-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h2 id="establishment-modal-title">Agregar establecimiento</h2>
-              <button className="modal-close" type="button" onClick={closeEstablishmentModal}>
-                x
-              </button>
-            </div>
-
-            <div className="modal-field">
-              <label htmlFor="new-establishment-name">Nombre</label>
-              <input
-                id="new-establishment-name"
-                type="text"
-                value={newEstablishmentName}
-                onChange={(event) => setNewEstablishmentName(event.target.value)}
-                placeholder="Ej: El Modelo"
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button className="action-button" type="button" onClick={closeEstablishmentModal}>
-                Cancelar
-              </button>
-              <button className="action-button primary" type="button" onClick={handleCreateEstablishment}>
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <section className="history">
         <div className="history-header">
           <span>
@@ -723,6 +741,7 @@ export function VaccinationForm({
           )}
         </div>
       </section>
-    </form>
+      </form>
+    </PageShell>
   );
 }
