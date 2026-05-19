@@ -63,7 +63,30 @@ export type Animal = {
   ageMonths: number | null;
   status: string;
   observations: string;
+  isSold?: boolean;
   createdAt: string;
   updatedAt: string;
   images: AnimalImage[];
+  profileImageId?: string | null;
 };
+
+export type CountingSession = {
+  id: string;
+  establishmentId: string;
+  fileName: string;
+  filePath: string;
+  fileSizeBytes: number;
+  manualCount: number | null;
+  autoCount: number | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function getProfileImage(animal: Pick<Animal, "images" | "profileImageId">): AnimalImage | null {
+  if (animal.profileImageId) {
+    const match = animal.images.find((image) => image.id === animal.profileImageId);
+    if (match) return match;
+  }
+  return animal.images[0] ?? null;
+}

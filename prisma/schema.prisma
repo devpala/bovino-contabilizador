@@ -1,0 +1,122 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AnimalImage {
+  id        BigInt   @id @default(autoincrement())
+  animalId  BigInt   @map("animal_id")
+  fileName  String   @map("file_name")
+  filePath  String   @map("file_path")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  animal    Animal   @relation("AnimalImages", fields: [animalId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profileOf Animal[] @relation("AnimalProfileImage")
+
+  @@index([animalId, createdAt(sort: Desc)], map: "animal_images_animal_idx")
+  @@map("animal_images")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Animal {
+  id                 BigInt              @id @default(autoincrement())
+  establishmentId    BigInt              @map("establishment_id")
+  categoryKey        String              @map("category_key")
+  identifier         String
+  description        String              @default("")
+  ageMonths          Int?                @map("age_months")
+  status             String              @default("")
+  observations       String              @default("")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  isSold             Boolean             @default(false) @map("is_sold")
+  profileImageId     BigInt?             @map("profile_image_id")
+
+  images             AnimalImage[]       @relation("AnimalImages")
+  establishment      Establishment       @relation(fields: [establishmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profileImage       AnimalImage?        @relation("AnimalProfileImage", fields: [profileImageId], references: [id], onUpdate: NoAction)
+  informationAnimals InformationAnimal[]
+
+  @@unique([establishmentId, categoryKey, identifier])
+  @@index([establishmentId, categoryKey, createdAt(sort: Desc)], map: "animals_establishment_category_idx")
+  @@map("animals")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Establishment {
+  id         BigInt   @id @default(autoincrement())
+  name       String   @unique
+  herdTotal  Int      @default(0) @map("herd_total")
+  herdDetail Json     @default("{}") @map("herd_detail")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  animals             Animal[]
+  countingSessions    CountingSession[]
+  informationAnimals  InformationAnimal[]
+  vaccinationRecords  VaccinationRecord[]
+
+  @@map("establishments")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model InformationAnimal {
+  id              BigInt   @id @default(autoincrement())
+  establishmentId BigInt   @map("establishment_id")
+  sectionKey      String   @map("section_key")
+  year            Int
+  animalType      String   @map("animal_type")
+  description     String
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  animalId        BigInt?  @map("animal_id")
+
+  animal        Animal?       @relation(fields: [animalId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([animalId, sectionKey, year], map: "information_animals_unique_animal_section_year_idx", where: raw("(animal_id IS NOT NULL)"))
+  @@index([establishmentId, createdAt(sort: Desc)], map: "information_animals_establishment_created_at_idx")
+  @@index([establishmentId, sectionKey, year], map: "information_animals_establishment_section_year_idx")
+  @@map("information_animals")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model VaccinationRecord {
+  id                 BigInt   @id @default(autoincrement())
+  location           String
+  total              Int
+  detail             Json
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  establishmentId    BigInt?  @map("establishment_id")
+  recordType         String   @default("snapshot") @map("record_type")
+  movementType       String?  @map("movement_type")
+  movementCategory   String?  @map("movement_category")
+  movementToCategory String?  @map("movement_to_category")
+  movementQuantity   Int?     @map("movement_quantity")
+
+  establishment Establishment? @relation(fields: [establishmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([establishmentId, createdAt(sort: Desc)], map: "vaccination_records_establishment_created_at_idx")
+  @@map("vaccination_records")
+}
+
+model CountingSession {
+  id              BigInt   @id @default(autoincrement())
+  establishmentId BigInt   @map("establishment_id")
+  fileName        String   @map("file_name")
+  filePath        String   @map("file_path")
+  fileSizeBytes   BigInt   @default(0) @map("file_size_bytes")
+  manualCount     Int?     @map("manual_count")
+  autoCount       Int?     @map("auto_count")
+  notes           String   @default("")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([establishmentId, createdAt(sort: Desc)], map: "counting_sessions_establishment_created_at_idx")
+  @@map("counting_sessions")
+}

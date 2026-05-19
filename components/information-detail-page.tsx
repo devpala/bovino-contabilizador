@@ -14,11 +14,12 @@ import {
   getInformationSectionByKey,
 } from "@/lib/information";
 import { PageShell } from "./page-shell";
-import type {
-  Establishment,
-  Animal,
-  InformationAnimal,
-  InformationSectionKey,
+import {
+  getProfileImage,
+  type Establishment,
+  type Animal,
+  type InformationAnimal,
+  type InformationSectionKey,
 } from "@/lib/types";
 import type { StoredImage } from "@/lib/storage";
 
@@ -335,13 +336,16 @@ export function InformationDetailPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleItems.map((item) => (
+                    {visibleItems.map((item) => {
+                      const linkedAnimal = item.animalId ? animalsById.get(item.animalId) : undefined;
+                      const profile = linkedAnimal ? getProfileImage(linkedAnimal) : null;
+                      return (
                       <tr key={item.id}>
                         <td>
-                          {item.animalId && animalsById.get(item.animalId)?.images[0]?.filePath ? (
+                          {profile?.filePath ? (
                             <img
                               className="info-table-avatar"
-                              src={animalsById.get(item.animalId)?.images[0]?.filePath}
+                              src={profile.filePath}
                               alt={item.animalIdentifier ?? item.animalId ?? "Vaca vieja"}
                               loading="lazy"
                             />
@@ -377,7 +381,8 @@ export function InformationDetailPage({
                           )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

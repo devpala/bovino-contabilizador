@@ -1,52 +1,39 @@
 import { promises as fs } from "fs";
 import path from "path";
 
-import { getPool } from "@/lib/db";
+import {
+  Prisma,
+  type AnimalImage as DbAnimalImage,
+  type Animal as DbAnimal,
+} from "@prisma/client";
+
+import { getPrisma } from "@/lib/prisma";
 import type { Animal, AnimalImage, HerdCategoryKey } from "@/lib/types";
 
-type DbAnimalRow = {
-  id: string;
-  establishment_id: string;
-  category_key: HerdCategoryKey;
-  identifier: string;
-  description: string;
-  age_months: number | null;
-  status: string;
-  observations: string;
-  created_at: Date;
-  updated_at: Date;
-};
-
-type DbAnimalImageRow = {
-  id: string;
-  animal_id: string;
-  file_name: string;
-  file_path: string;
-  created_at: Date;
-};
-
-function mapImageRow(row: DbAnimalImageRow): AnimalImage {
+function mapImageRow(row: DbAnimalImage): AnimalImage {
   return {
-    id: row.id,
-    animalId: row.animal_id,
-    fileName: row.file_name,
-    filePath: row.file_path,
-    createdAt: row.created_at.toISOString(),
+    id: row.id.toString(),
+    animalId: row.animalId.toString(),
+    fileName: row.fileName,
+    filePath: row.filePath,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
-function mapAnimalRow(row: DbAnimalRow, images: AnimalImage[]): Animal {
+function mapAnimalRow(row: DbAnimal, images: AnimalImage[]): Animal {
   return {
-    id: row.id,
-    establishmentId: row.establishment_id,
-    categoryKey: row.category_key,
+    id: row.id.toString(),
+    establishmentId: row.establishmentId.toString(),
+    categoryKey: row.categoryKey as HerdCategoryKey,
     identifier: row.identifier,
     description: row.description,
-    ageMonths: row.age_months,
+    ageMonths: row.ageMonths,
     status: row.status,
     observations: row.observations,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
+    isSold: row.isSold,
+    profileImageId: row.profileImageId?.toString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
     images,
   };
 }
@@ -60,50 +47,31 @@ function sanitizeFileName(fileName: string) {
     .toLowerCase();
 }
 
-export async function getAnimals(): Promise<Animal[]> {
-  const pool = getPool();
-  const [animalsResult, imagesResult] = await Promise.all([
-    pool.query<DbAnimalRow>(
-      `
-        select
-          id::text,
-          establishment_id::text,
-          category_key,
-          identifier,
-          description,
-          age_months,
-          status,
-          observations,
-          created_at,
-          updated_at
-        from animals
-        order by created_at desc
-      `,
-    ),
-    pool.query<DbAnimalImageRow>(
-      `
-        select
-          id::text,
-          animal_id::text,
-          file_name,
-          file_path,
-          created_at
-        from animal_images
-        order by created_at desc
-      `,
-    ),
+function isNotFound(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025";
+}
+
+export async function getAnimals(includeSold = false): Promise<Animal[]> {
+  const prisma = getPrisma();
+  const [animals, images] = await Promise.all([
+    prisma.animal.findMany({
+      where: includeSold ? undefined : { isSold: false },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.animalImage.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const imagesByAnimalId = new Map<string, AnimalImage[]>();
-
-  for (const row of imagesResult.rows) {
+  for (const row of images) {
     const image = mapImageRow(row);
     const current = imagesByAnimalId.get(image.animalId) ?? [];
     current.push(image);
     imagesByAnimalId.set(image.animalId, current);
   }
 
-  return animalsResult.rows.map((row) => mapAnimalRow(row, imagesByAnimalId.get(row.id) ?? []));
+  return animals.map((row) => mapAnimalRow(row, imagesByAnimalId.get(row.id.toString()) ?? []));
 }
 
 export async function getAnimalById(id: string): Promise<Animal | null> {
@@ -112,17 +80,11 @@ export async function getAnimalById(id: string): Promise<Animal | null> {
 }
 
 export async function establishmentHasAnimals(establishmentId: string): Promise<boolean> {
-  const pool = getPool();
-  const result = await pool.query<{ animal_count: number }>(
-    `
-      select count(*)::int as animal_count
-      from animals
-      where establishment_id = $1::bigint
-    `,
-    [establishmentId],
-  );
-
-  return (result.rows[0]?.animal_count ?? 0) > 0;
+  const prisma = getPrisma();
+  const count = await prisma.animal.count({
+    where: { establishmentId: BigInt(establishmentId) },
+  });
+  return count > 0;
 }
 
 export async function createAnimal(input: {
@@ -134,43 +96,19 @@ export async function createAnimal(input: {
   status: string;
   observations: string;
 }): Promise<Animal> {
-  const pool = getPool();
-  const result = await pool.query<DbAnimalRow>(
-    `
-      insert into animals (
-        establishment_id,
-        category_key,
-        identifier,
-        description,
-        age_months,
-        status,
-        observations
-      )
-      values ($1::bigint, $2, $3, $4, $5, $6, $7)
-      returning
-        id::text,
-        establishment_id::text,
-        category_key,
-        identifier,
-        description,
-        age_months,
-        status,
-        observations,
-        created_at,
-        updated_at
-    `,
-    [
-      input.establishmentId,
-      input.categoryKey,
-      input.identifier,
-      input.description,
-      input.ageMonths,
-      input.status,
-      input.observations,
-    ],
-  );
-
-  return mapAnimalRow(result.rows[0], []);
+  const prisma = getPrisma();
+  const row = await prisma.animal.create({
+    data: {
+      establishmentId: BigInt(input.establishmentId),
+      categoryKey: input.categoryKey,
+      identifier: input.identifier,
+      description: input.description,
+      ageMonths: input.ageMonths,
+      status: input.status,
+      observations: input.observations,
+    },
+  });
+  return mapAnimalRow(row, []);
 }
 
 export async function updateAnimal(input: {
@@ -182,44 +120,55 @@ export async function updateAnimal(input: {
   status: string;
   observations: string;
 }): Promise<Animal | null> {
-  const pool = getPool();
-  const result = await pool.query<DbAnimalRow>(
-    `
-      update animals
-      set
-        description = $3,
-        age_months = $4,
-        status = $5,
-        observations = $6,
-        updated_at = now()
-      where id = $1::bigint
-        and establishment_id = $2::bigint
-        and category_key = $7
-      returning
-        id::text,
-        establishment_id::text,
-        category_key,
-        identifier,
-        description,
-        age_months,
-        status,
-        observations,
-        created_at,
-        updated_at
-    `,
-    [
-      input.id,
-      input.establishmentId,
-      input.description,
-      input.ageMonths,
-      input.status,
-      input.observations,
-      input.categoryKey,
-    ],
-  );
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.animal.updateMany({
+      where: {
+        id: BigInt(input.id),
+        establishmentId: BigInt(input.establishmentId),
+        categoryKey: input.categoryKey,
+      },
+      data: {
+        description: input.description,
+        ageMonths: input.ageMonths,
+        status: input.status,
+        observations: input.observations,
+      },
+    });
+    if (result.count === 0) return null;
 
-  const row = result.rows[0];
-  return row ? mapAnimalRow(row, []) : null;
+    const row = await tx.animal.findUnique({ where: { id: BigInt(input.id) } });
+    return row ? mapAnimalRow(row, []) : null;
+  });
+}
+
+export async function setAnimalProfileImage(input: {
+  animalId: string;
+  imageId: string | null;
+}): Promise<Animal | null> {
+  const prisma = getPrisma();
+  return prisma.$transaction(async (tx) => {
+    if (input.imageId) {
+      const image = await tx.animalImage.findFirst({
+        where: {
+          id: BigInt(input.imageId),
+          animalId: BigInt(input.animalId),
+        },
+      });
+      if (!image) return null;
+    }
+
+    try {
+      const row = await tx.animal.update({
+        where: { id: BigInt(input.animalId) },
+        data: { profileImageId: input.imageId ? BigInt(input.imageId) : null },
+      });
+      return mapAnimalRow(row, []);
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  });
 }
 
 export async function deleteAnimal(input: {
@@ -227,21 +176,33 @@ export async function deleteAnimal(input: {
   establishmentId: string;
   categoryKey: HerdCategoryKey;
 }): Promise<boolean> {
-  const pool = getPool();
-  const result = await pool.query(
-    `
-      delete from animals
-      where id = $1::bigint
-        and establishment_id = $2::bigint
-        and category_key = $3
-    `,
-    [input.id, input.establishmentId, input.categoryKey],
-  );
+  const prisma = getPrisma();
+  const result = await prisma.animal.deleteMany({
+    where: {
+      id: BigInt(input.id),
+      establishmentId: BigInt(input.establishmentId),
+      categoryKey: input.categoryKey,
+    },
+  });
 
   const animalDir = path.join(process.cwd(), "storage", "animals", input.id);
   await fs.rm(animalDir, { recursive: true, force: true });
 
-  return (result.rowCount ?? 0) > 0;
+  return result.count > 0;
+}
+
+export async function markAnimalAsSold(id: string): Promise<boolean> {
+  const prisma = getPrisma();
+  try {
+    await prisma.animal.update({
+      where: { id: BigInt(id) },
+      data: { isSold: true },
+    });
+    return true;
+  } catch (error) {
+    if (isNotFound(error)) return false;
+    throw error;
+  }
 }
 
 export async function createAnimalImage(input: {
@@ -249,61 +210,43 @@ export async function createAnimalImage(input: {
   fileName: string;
   filePath: string;
 }): Promise<AnimalImage> {
-  const pool = getPool();
-  const result = await pool.query<DbAnimalImageRow>(
-    `
-      insert into animal_images (
-        animal_id,
-        file_name,
-        file_path
-      )
-      values ($1::bigint, $2, $3)
-      returning
-        id::text,
-        animal_id::text,
-        file_name,
-        file_path,
-        created_at
-    `,
-    [input.animalId, input.fileName, input.filePath],
-  );
-
-  return mapImageRow(result.rows[0]);
+  const prisma = getPrisma();
+  const row = await prisma.animalImage.create({
+    data: {
+      animalId: BigInt(input.animalId),
+      fileName: input.fileName,
+      filePath: input.filePath,
+    },
+  });
+  return mapImageRow(row);
 }
 
 export async function deleteAnimalImage(input: {
   id: string;
   animalId: string;
 }): Promise<{ deleted: boolean; filePath: string | null }> {
-  const pool = getPool();
-  const result = await pool.query<DbAnimalImageRow>(
-    `
-      delete from animal_images
-      where id = $1::bigint
-        and animal_id = $2::bigint
-      returning
-        id::text,
-        animal_id::text,
-        file_name,
-        file_path,
-        created_at
-    `,
-    [input.id, input.animalId],
-  );
+  const prisma = getPrisma();
 
-  const row = result.rows[0];
+  const deleted = await prisma.$transaction(async (tx) => {
+    const row = await tx.animalImage.findFirst({
+      where: {
+        id: BigInt(input.id),
+        animalId: BigInt(input.animalId),
+      },
+    });
+    if (!row) return null;
+    await tx.animalImage.delete({ where: { id: row.id } });
+    return row;
+  });
 
-  if (!row) {
+  if (!deleted) {
     return { deleted: false, filePath: null };
   }
 
-  const fileOnDisk = path.join(process.cwd(), "storage", "animals", input.animalId, row.file_name);
+  const fileOnDisk = path.join(process.cwd(), "storage", "animals", input.animalId, deleted.fileName);
   await fs.rm(fileOnDisk, { force: true });
 
-  return {
-    deleted: true,
-    filePath: row.file_path,
-  };
+  return { deleted: true, filePath: deleted.filePath };
 }
 
 export async function saveAnimalImageFile(input: {

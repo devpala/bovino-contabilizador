@@ -6,8 +6,8 @@ Aplicacion web en Next.js 16.2.1 para administrar rodeos bovinos por establecimi
 
 - Next.js 16.2.1
 - React 19
-- PostgreSQL
-- `pg`
+- PostgreSQL via Prisma 7
+- `pg` (driver) + `@prisma/client`
 - `jspdf` + `jspdf-autotable`
 
 ## Funcionalidades
@@ -39,36 +39,45 @@ DATABASE_URL=postgresql://postgres:your_password@localhost:5432/bovino_contabili
 ## Instalacion
 
 ```bash
-npm install
+pnpm install
 ```
+
+El `postinstall` corre `prisma generate`, asi que el cliente queda listo despues del install.
 
 ## Base de datos
 
-Crear la base y aplicar el esquema:
+Crear la base vacia y dejar que Prisma aplique todas las migraciones:
 
 ```bash
 createdb bovino_contabilizador
-psql -d bovino_contabilizador -f db/schema.sql
+pnpm exec dotenv -e .env.local -- prisma migrate deploy
 ```
 
-En Windows con PostgreSQL instalado:
+En Windows con PostgreSQL 18:
 
 ```powershell
 & 'C:\Program Files\PostgreSQL\18\bin\createdb.exe' -U postgres -h localhost -p 5432 bovino_contabilizador
-& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -U postgres -h localhost -p 5432 -d bovino_contabilizador -f '.\db\schema.sql'
+pnpm exec dotenv -e .env.local -- prisma migrate deploy
 ```
+
+Scripts utiles:
+
+- `pnpm db:migrate` — crear una nueva migracion en dev (edita `prisma/schema.prisma` y corre este comando)
+- `pnpm db:generate` — regenerar el cliente Prisma sin tocar la DB
+- `pnpm db:pull` — re-importar el esquema desde la DB (solo si se cambio algo fuera de Prisma)
+- `pnpm db:studio` — GUI para inspeccionar datos
 
 ## Desarrollo
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ## Build
 
 ```bash
-npm run build
-npm run start
+pnpm build
+pnpm start
 ```
 
 ## Estructura
@@ -76,7 +85,9 @@ npm run start
 - `app/`: rutas y server actions
 - `components/`: interfaz principal
 - `lib/`: acceso a datos y tipos
-- `db/schema.sql`: esquema PostgreSQL
+- `prisma/schema.prisma`: fuente de verdad del esquema
+- `prisma/migrations/`: historial de migraciones aplicadas
+- `prisma.config.ts`: config del CLI de Prisma (lee `DATABASE_URL` desde `.env.local` via `dotenv-cli`)
 
 ## Publicacion
 

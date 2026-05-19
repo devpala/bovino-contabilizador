@@ -61,8 +61,12 @@ function getMovementSummary(record: VaccinationRecord) {
 
   if (record.movementType === "venta" || record.movementType === "muerte") {
     const previousTotal = record.total + record.movementQuantity;
+    const saleInfo = (record.detail as any).weight_final
+      ? ` (${(record.detail as any).weight_final.toFixed(1)}kg @ $${(record.detail as any).total_payment.toLocaleString("es-AR")})`
+      : "";
+
     return {
-      change: `Se resto ${record.movementQuantity}.`,
+      change: `Se resto ${record.movementQuantity}${saleInfo}.`,
       balance: `Saldo anterior: ${previousTotal}.`,
     };
   }
@@ -415,6 +419,18 @@ export function VaccinationForm({
           >
             Registrar
           </button>
+          <Link
+            className="action-button"
+            href="/ventas"
+          >
+            Historial de ventas
+          </Link>
+          <Link
+            className="action-button"
+            href="/conteo"
+          >
+            Conteo
+          </Link>
         </div>
 
       <div className="section-title">Bovinos</div>
@@ -719,7 +735,7 @@ export function VaccinationForm({
                   <div>
                     <strong>{title}</strong>
                     <div className="history-detail">{detail || "Sin cambios de detalle."}</div>
-                    <div className="history-date">
+                    <div className="history-date" suppressHydrationWarning>
                       {new Intl.DateTimeFormat("es-AR", {
                         dateStyle: "short",
                         timeStyle: "short",
