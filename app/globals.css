@@ -1502,6 +1502,53 @@ button.ficha-gallery-link:focus-visible .ficha-gallery-frame {
   object-fit: contain;
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.6);
   background: var(--ficha-paper-alt);
+  transform-origin: center center;
+  touch-action: none;
+  will-change: transform;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ficha-lightbox-zoom {
+  position: absolute;
+  top: 22px;
+  left: 26px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(244, 234, 216, 0.08);
+  border: 1px solid rgba(244, 234, 216, 0.3);
+}
+.ficha-lightbox-zoom-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ficha-paper);
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  font-family: inherit;
+}
+.ficha-lightbox-zoom-btn:hover:not(:disabled) {
+  background: var(--ficha-paper);
+  color: var(--ficha-ink);
+}
+.ficha-lightbox-zoom-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.ficha-lightbox-zoom-level {
+  min-width: 52px;
+  text-align: center;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  color: var(--ficha-paper);
+  opacity: 0.8;
 }
 
 .ficha-lightbox-caption {
@@ -1610,6 +1657,18 @@ button.ficha-gallery-link:focus-visible .ficha-gallery-frame {
     max-height: calc(100vh - 200px);
   }
   .ficha-lightbox-caption-name { max-width: 200px; }
+  .ficha-lightbox-zoom {
+    top: 14px;
+    left: 12px;
+  }
+  .ficha-lightbox-zoom-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .ficha-lightbox-zoom-level {
+    min-width: 44px;
+    font-size: 0.7rem;
+  }
 }
 
 /* === Hero body === */

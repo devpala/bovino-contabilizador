@@ -38,6 +38,14 @@ const initialState: AnimalState = {
 
 const MONTH_ABBR = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
 
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.5;
+
+function clampZoom(value: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+}
+
 function createDraft(animal: Animal): AnimalDraft {
   return {
     description: animal.description,
@@ -86,6 +94,11 @@ export function AnimalDetailPage({
     return 0;
   });
   const uploadFormRef = useRef<HTMLFormElement>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panOriginRef = useRef({ startX: 0, startY: 0, panX: 0, panY: 0 });
 
   const category = CATEGORIES.find((item) => item.key === animal.categoryKey);
   const categoryLabel = category?.label ?? animal.categoryKey;
@@ -100,10 +113,26 @@ export function AnimalDetailPage({
   function showPrevImage() {
     if (imageCount < 2) return;
     setCurrentImageIndex((idx) => (idx - 1 + imageCount) % imageCount);
+    resetZoom();
   }
   function showNextImage() {
     if (imageCount < 2) return;
     setCurrentImageIndex((idx) => (idx + 1) % imageCount);
+    resetZoom();
+  }
+  function resetZoom() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
+  function zoomIn() {
+    setZoom((z) => clampZoom(z + ZOOM_STEP));
+  }
+  function zoomOut() {
+    setZoom((z) => {
+      const next = clampZoom(z - ZOOM_STEP);
+      if (next <= ZOOM_MIN) setPan({ x: 0, y: 0 });
+      return next;
+    });
   }
   function openLightbox(index?: number) {
     if (imageCount === 0) return;
@@ -113,10 +142,39 @@ export function AnimalDetailPage({
       const profileIdx = animal.images.findIndex((img) => img.id === profile.id);
       setCurrentImageIndex(profileIdx >= 0 ? profileIdx : 0);
     }
+    resetZoom();
     setIsLightboxOpen(true);
   }
   function closeLightbox() {
     setIsLightboxOpen(false);
+    resetZoom();
+  }
+
+  function handlePanStart(event: React.PointerEvent<HTMLImageElement>) {
+    if (zoom <= ZOOM_MIN) return;
+    event.preventDefault();
+    panOriginRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
+    setIsPanning(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function handlePanMove(event: React.PointerEvent<HTMLImageElement>) {
+    if (!isPanning) return;
+    const { startX, startY, panX, panY } = panOriginRef.current;
+    setPan({ x: panX + (event.clientX - startX), y: panY + (event.clientY - startY) });
+  }
+  function handlePanEnd(event: React.PointerEvent<HTMLImageElement>) {
+    if (!isPanning) return;
+    setIsPanning(false);
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // pointer ya liberado
+    }
   }
 
   useEffect(() => {
@@ -128,9 +186,13 @@ export function AnimalDetailPage({
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
         setCurrentImageIndex((idx) => (idx - 1 + imageCount) % imageCount);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         setCurrentImageIndex((idx) => (idx + 1) % imageCount);
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
       }
     }
     const prev = document.body.style.overflow;
@@ -141,6 +203,24 @@ export function AnimalDetailPage({
       window.removeEventListener("keydown", handleKey);
     };
   }, [isLightboxOpen, imageCount]);
+
+  // Zoom con la rueda del mouse (listener nativo para poder preventDefault).
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+    const el = lightboxRef.current;
+    if (!el) return;
+    function handleWheel(event: WheelEvent) {
+      event.preventDefault();
+      const delta = event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      setZoom((z) => {
+        const next = clampZoom(z + delta);
+        if (next <= ZOOM_MIN) setPan({ x: 0, y: 0 });
+        return next;
+      });
+    }
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [isLightboxOpen]);
 
   function handleEstablishmentCreated(establishment: Establishment) {
     setEstablishments((current) =>
@@ -800,6 +880,7 @@ export function AnimalDetailPage({
 
       {isLightboxOpen && currentImage ? (
         <div
+          ref={lightboxRef}
           className="ficha-lightbox"
           role="dialog"
           aria-modal="true"
@@ -815,14 +896,59 @@ export function AnimalDetailPage({
             <span aria-hidden="true">×</span>
           </button>
 
+          <div
+            className="ficha-lightbox-zoom"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="ficha-lightbox-zoom-btn"
+              onClick={zoomOut}
+              disabled={zoom <= ZOOM_MIN}
+              aria-label="Alejar"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <line x1="15.5" y1="15.5" x2="21" y2="21" />
+                <line x1="7.5" y1="10.5" x2="13.5" y2="10.5" />
+              </svg>
+            </button>
+            <span className="ficha-lightbox-zoom-level ficha-mono">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              className="ficha-lightbox-zoom-btn"
+              onClick={zoomIn}
+              disabled={zoom >= ZOOM_MAX}
+              aria-label="Acercar"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.5" />
+                <line x1="15.5" y1="15.5" x2="21" y2="21" />
+                <line x1="10.5" y1="7.5" x2="10.5" y2="13.5" />
+                <line x1="7.5" y1="10.5" x2="13.5" y2="10.5" />
+              </svg>
+            </button>
+          </div>
+
           <figure
             className="ficha-lightbox-stage"
             onClick={(event) => event.stopPropagation()}
           >
             <img
-              className="ficha-lightbox-img"
+              className={`ficha-lightbox-img ${zoom > 1 ? "is-zoomed" : ""}`}
               src={currentImage.filePath}
               alt={currentImage.fileName}
+              draggable={false}
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transition: isPanning ? "none" : "transform 0.18s ease",
+                cursor: zoom > 1 ? (isPanning ? "grabbing" : "grab") : "zoom-in",
+              }}
+              onPointerDown={handlePanStart}
+              onPointerMove={handlePanMove}
+              onPointerUp={handlePanEnd}
+              onPointerCancel={handlePanEnd}
+              onDoubleClick={() => (zoom > 1 ? resetZoom() : zoomIn())}
             />
             <figcaption className="ficha-lightbox-caption">
               <span className="ficha-mono">
