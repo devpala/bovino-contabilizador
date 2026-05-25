@@ -2786,6 +2786,111 @@ button.ficha-gallery-link:focus-visible .ficha-gallery-frame {
   letter-spacing: 0.12em;
 }
 
+/* === "Ver todas" trigger === */
+.catalogo-cover-trigger {
+  appearance: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--ficha-ink);
+  color: var(--ficha-paper);
+  border: 1px solid var(--ficha-ink);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+.catalogo-cover-trigger:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ficha-ink);
+  transform: translateY(-1px);
+}
+.catalogo-cover-trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.catalogo-cover-trigger-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.catalogo-cover-trigger-count {
+  opacity: 0.6;
+}
+
+/* === Cover viewer (reusa el shell .ficha-lightbox) === */
+.catalogo-cover .ficha-lightbox-img {
+  max-height: calc(100vh - 240px);
+}
+.catalogo-cover-bar {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+}
+.catalogo-cover-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: rgba(244, 234, 216, 0.08);
+  border: 1px solid rgba(244, 234, 216, 0.18);
+  color: var(--ficha-paper);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  max-width: 90vw;
+}
+.catalogo-cover-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(244, 234, 216, 0.3);
+}
+.catalogo-cover-counter {
+  opacity: 0.6;
+}
+.catalogo-cover-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 28px;
+  background: var(--ficha-paper);
+  color: var(--ficha-ink);
+  border: 1px solid var(--ficha-paper);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+.catalogo-cover-cta:hover {
+  background: transparent;
+  color: var(--ficha-paper);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .catalogo-cover .ficha-lightbox-img {
+    max-height: calc(100vh - 290px);
+  }
+  .catalogo-cover-trigger {
+    padding: 7px 12px;
+    font-size: 0.68rem;
+  }
+  .catalogo-cover-cta {
+    padding: 11px 22px;
+    font-size: 0.74rem;
+  }
+}
+
 /* === Card grid === */
 
 .catalogo-grid {

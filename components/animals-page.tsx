@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { createAnimalAction, type AnimalState } from "@/app/actions";
 import { CATEGORIES } from "@/lib/categories";
@@ -85,6 +85,8 @@ export function AnimalsPage({
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [state, setState] = useState<AnimalState>(initialState);
   const [isPending, startTransition] = useTransition();
+  const [isCoverViewerOpen, setIsCoverViewerOpen] = useState(false);
+  const [coverIndex, setCoverIndex] = useState(0);
 
   const category = CATEGORIES.find((item) => item.key === categoryKey);
   const categoryLabel = category?.label ?? categoryKey;
@@ -119,7 +121,58 @@ export function AnimalsPage({
     [filteredAnimals, markedOldCowIds, categoryKey],
   );
 
+  // Animales con foto de portada, para el visor de portadas grande.
+  const coverAnimals = useMemo(
+    () => filteredAnimals.filter((animal) => getProfileImage(animal)?.filePath),
+    [filteredAnimals],
+  );
+  const safeCoverIndex =
+    coverAnimals.length === 0 ? 0 : Math.min(coverIndex, coverAnimals.length - 1);
+  const currentCover = coverAnimals[safeCoverIndex] ?? null;
+  const currentCoverProfile = currentCover ? getProfileImage(currentCover) : null;
+  const hasMultipleCovers = coverAnimals.length > 1;
+
   const currentYear = new Date().getFullYear();
+
+  function openCoverViewer(index = 0) {
+    if (coverAnimals.length === 0) return;
+    setCoverIndex(index);
+    setIsCoverViewerOpen(true);
+  }
+  function closeCoverViewer() {
+    setIsCoverViewerOpen(false);
+  }
+  function showPrevCover() {
+    if (coverAnimals.length < 2) return;
+    setCoverIndex((idx) => (idx - 1 + coverAnimals.length) % coverAnimals.length);
+  }
+  function showNextCover() {
+    if (coverAnimals.length < 2) return;
+    setCoverIndex((idx) => (idx + 1) % coverAnimals.length);
+  }
+
+  useEffect(() => {
+    if (!isCoverViewerOpen) return;
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsCoverViewerOpen(false);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setCoverIndex((idx) => (idx - 1 + coverAnimals.length) % coverAnimals.length);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setCoverIndex((idx) => (idx + 1) % coverAnimals.length);
+      }
+    }
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [isCoverViewerOpen, coverAnimals.length]);
 
   function handleEstablishmentCreated(establishment: Establishment) {
     setEstablishments((current) =>
@@ -334,6 +387,28 @@ export function AnimalsPage({
           <header className="catalogo-section-head">
             <h2 className="catalogo-section-head-title">Ejemplares registrados</h2>
             <span className="catalogo-section-head-rule" aria-hidden="true" />
+            <button
+              type="button"
+              className="catalogo-cover-trigger"
+              onClick={() => openCoverViewer(0)}
+              disabled={coverAnimals.length === 0}
+              title={
+                coverAnimals.length === 0
+                  ? "No hay fotos de portada para mostrar"
+                  : "Ver las portadas en grande"
+              }
+            >
+              <span className="catalogo-cover-trigger-icon" aria-hidden="true">⛶</span>
+              <span>
+                Ver todas
+                {coverAnimals.length > 0 ? (
+                  <span className="catalogo-cover-trigger-count ficha-mono">
+                    {" "}
+                    {String(coverAnimals.length).padStart(2, "0")}
+                  </span>
+                ) : null}
+              </span>
+            </button>
             <span className="catalogo-section-head-aside">
               {String(filteredAnimals.length).padStart(2, "0")}{" "}
               {filteredAnimals.length === 1 ? "lote" : "lotes"}
@@ -462,6 +537,91 @@ export function AnimalsPage({
           </span>
         </footer>
       </article>
+
+      {isCoverViewerOpen && currentCover && currentCoverProfile ? (
+        <div
+          className="ficha-lightbox catalogo-cover"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Portadas de la categoría"
+          onClick={closeCoverViewer}
+        >
+          <button
+            type="button"
+            className="ficha-lightbox-close"
+            onClick={closeCoverViewer}
+            aria-label="Cerrar visor"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+
+          <figure
+            className="ficha-lightbox-stage"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              className="ficha-lightbox-img"
+              src={currentCoverProfile.filePath}
+              alt={currentCover.identifier}
+            />
+            <figcaption className="catalogo-cover-bar">
+              <div className="catalogo-cover-meta">
+                <span className="ficha-mono">
+                  Nº{" "}
+                  {String(loteNumberById.get(currentCover.id) ?? safeCoverIndex + 1).padStart(3, "0")}
+                </span>
+                <span className="catalogo-cover-sep" aria-hidden="true" />
+                <span className="ficha-mono">{shortIdentifier(currentCover.identifier)}</span>
+                {currentCover.ageMonths != null ? (
+                  <>
+                    <span className="catalogo-cover-sep" aria-hidden="true" />
+                    <span className="ficha-mono">{currentCover.ageMonths} m</span>
+                  </>
+                ) : null}
+                {currentCover.status ? (
+                  <>
+                    <span className="catalogo-cover-sep" aria-hidden="true" />
+                    <span>{currentCover.status}</span>
+                  </>
+                ) : null}
+                <span className="catalogo-cover-sep" aria-hidden="true" />
+                <span className="catalogo-cover-counter ficha-mono">
+                  {String(safeCoverIndex + 1).padStart(2, "0")} /{" "}
+                  {String(coverAnimals.length).padStart(2, "0")}
+                </span>
+              </div>
+              <Link
+                className="catalogo-cover-cta"
+                href={`/animales/${currentCover.categoryKey}/${currentCover.id}?establishmentId=${currentCover.establishmentId}`}
+              >
+                <span>Ver ficha completa</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+            </figcaption>
+          </figure>
+
+          {hasMultipleCovers ? (
+            <>
+              <button
+                type="button"
+                className="ficha-lightbox-nav ficha-lightbox-nav-prev"
+                onClick={(event) => { event.stopPropagation(); showPrevCover(); }}
+                aria-label="Portada anterior"
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+              <button
+                type="button"
+                className="ficha-lightbox-nav ficha-lightbox-nav-next"
+                onClick={(event) => { event.stopPropagation(); showNextCover(); }}
+                aria-label="Portada siguiente"
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </PageShell>
   );
 }
