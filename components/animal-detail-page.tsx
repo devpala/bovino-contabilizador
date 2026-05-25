@@ -98,7 +98,7 @@ export function AnimalDetailPage({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
-  const panOriginRef = useRef({ startX: 0, startY: 0, panX: 0, panY: 0 });
+  const panOriginRef = useRef({ startX: 0, startY: 0, panX: 0, panY: 0, moved: false });
 
   const category = CATEGORIES.find((item) => item.key === animal.categoryKey);
   const categoryLabel = category?.label ?? animal.categoryKey;
@@ -134,6 +134,16 @@ export function AnimalDetailPage({
       return next;
     });
   }
+  // Un clic sobre la foto acerca un paso; al llegar al máximo vuelve a 100%.
+  function stepZoom() {
+    setZoom((z) => {
+      if (z >= ZOOM_MAX) {
+        setPan({ x: 0, y: 0 });
+        return ZOOM_MIN;
+      }
+      return clampZoom(z + ZOOM_STEP);
+    });
+  }
   function openLightbox(index?: number) {
     if (imageCount === 0) return;
     if (typeof index === "number") {
@@ -151,29 +161,40 @@ export function AnimalDetailPage({
   }
 
   function handlePanStart(event: React.PointerEvent<HTMLImageElement>) {
-    if (zoom <= ZOOM_MIN) return;
-    event.preventDefault();
     panOriginRef.current = {
       startX: event.clientX,
       startY: event.clientY,
       panX: pan.x,
       panY: pan.y,
+      moved: false,
     };
+    if (zoom <= ZOOM_MIN) return;
+    event.preventDefault();
     setIsPanning(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
   function handlePanMove(event: React.PointerEvent<HTMLImageElement>) {
     if (!isPanning) return;
     const { startX, startY, panX, panY } = panOriginRef.current;
-    setPan({ x: panX + (event.clientX - startX), y: panY + (event.clientY - startY) });
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (!panOriginRef.current.moved && Math.hypot(dx, dy) > 6) {
+      panOriginRef.current.moved = true;
+    }
+    setPan({ x: panX + dx, y: panY + dy });
   }
   function handlePanEnd(event: React.PointerEvent<HTMLImageElement>) {
-    if (!isPanning) return;
-    setIsPanning(false);
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // pointer ya liberado
+    if (isPanning) {
+      setIsPanning(false);
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // pointer ya liberado
+      }
+    }
+    // Si fue un clic (sin arrastre real), acercá; el cancel no cuenta como clic.
+    if (event.type === "pointerup" && !panOriginRef.current.moved) {
+      stepZoom();
     }
   }
 
@@ -942,13 +963,12 @@ export function AnimalDetailPage({
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transition: isPanning ? "none" : "transform 0.18s ease",
-                cursor: zoom > 1 ? (isPanning ? "grabbing" : "grab") : "zoom-in",
+                cursor: isPanning ? "grabbing" : zoom >= ZOOM_MAX ? "zoom-out" : "zoom-in",
               }}
               onPointerDown={handlePanStart}
               onPointerMove={handlePanMove}
               onPointerUp={handlePanEnd}
               onPointerCancel={handlePanEnd}
-              onDoubleClick={() => (zoom > 1 ? resetZoom() : zoomIn())}
             />
             <figcaption className="ficha-lightbox-caption">
               <span className="ficha-mono">
